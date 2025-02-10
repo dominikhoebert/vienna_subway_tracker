@@ -1,12 +1,15 @@
 import csv
-
-from setuptools.dist import sequence
+import requests
+from datetime import datetime
 
 from lines import Line, Stop
 
 LINES_FILE_NAME = "data/wienerlinien-ogd-linien.csv"
 STOPS_FILE_NAME = "data/wienerlinien-ogd-haltepunkte.csv"
 CONNECTION_FILE_NAME = "data/wienerlinien-ogd-fahrwegverlaeufe.csv"
+
+BASE_URL = "https://www.wienerlinien.at/ogd_realtime/monitor?stopId="
+URL_JOINER = "&stopId="
 
 
 def read_lines(lines_file_name: str) -> dict[int:Line]:
@@ -56,17 +59,33 @@ def filter_lines(lines: dict[int:Line], type: str) -> dict[int:Line]:
     return l
 
 
-def parse_line_patterns(lines: Line, stops: dict[int:Stop]):
-    for l in lines:
+def parse_line_patterns(lines: dict[int:Line]):
+    for id, l in lines.items():
         for direction, pattern in l.patterns.items():
             for i in range(0, len(pattern)):
                 stop = pattern[i]
                 stop.prev = pattern[i - 1] if i > 0 else None
                 stop.next = pattern[i + 1] if i < len(pattern) - 1 else None
+                l.stops[stop.id] = stop
 
 
-def create_url(line: Line) -> str:
-    pass
+def create_url(lines: dict[int:Line]) -> str:
+    stop_list = []
+    for lid, line in lines.items():
+        for id, stop in line.stops.items():
+            stop_list.append(id)
+    stop_tup = tuple(stop_list)
+
+    return BASE_URL + URL_JOINER.join(map(str, stop_tup))
+
+
+def request_stations(url: str, save: bool = False):
+    response = requests.get(url)
+    if save:
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        with open(f'responses/{timestamp}_stations.json', 'w') as f:
+            f.write(response.text)
+    return response.json()
 
 
 def main():
@@ -77,8 +96,12 @@ def main():
     read_connections(CONNECTION_FILE_NAME, lines, stops)
     for id, l in lines.items():
         print(l.patterns)
-    parse_line_patterns(lines, stops)
-    print(lines.pa)
+    parse_line_patterns(lines)
+    create_url(lines)
+    url = create_url(lines)
+    print(url)
+    response = request_stations(url, save=True)
+    print(response)
 
 
 if __name__ == "__main__":

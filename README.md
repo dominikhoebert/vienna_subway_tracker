@@ -9,3 +9,9 @@ aus der [WL API](https://www.data.gv.at/katalog/dataset/522d3045-0b37-48d0-b868-
 https://www.wienerlinien.at/ogd_realtime/monitor?stopId=2171&stopId=168
 ```
 mit Python Script aus wienerlinien-ogd-fahrverlaeufe.csv, haltepunkte und linien
+
+### TODO
+
+- ~~lat lon to coordinates~~
+- draw color dots for stations
+- connect dots with lines

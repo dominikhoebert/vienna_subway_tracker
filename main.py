@@ -2,6 +2,8 @@ import csv
 import requests
 from datetime import datetime
 
+from p5 import *
+
 from lines import Line, Stop
 
 LINES_FILE_NAME = "data/wienerlinien-ogd-linien.csv"
@@ -10,6 +12,11 @@ CONNECTION_FILE_NAME = "data/wienerlinien-ogd-fahrwegverlaeufe.csv"
 
 BASE_URL = "https://www.wienerlinien.at/ogd_realtime/monitor?stopId="
 URL_JOINER = "&stopId="
+
+SIZE = (1000, 1000)  # x, y
+station_size = 10
+
+stop_list = []
 
 
 def read_lines(lines_file_name: str) -> dict[int:Line]:
@@ -69,6 +76,36 @@ def parse_line_patterns(lines: dict[int:Line]):
                 l.stops[stop.id] = stop
 
 
+def calc_coordinates(stops: list[Stop]):
+    # get min and max lat and lon
+    min_lat = min([s.lat for s in stops])
+    max_lat = max([s.lat for s in stops])
+    min_lon = min([s.lon for s in stops])
+    max_lon = max([s.lon for s in stops])
+
+    # calculate x and y coordinates
+    for s in stops:
+        x = int((s.lon - min_lon) / (max_lon - min_lon) * SIZE[0])
+        y = int((s.lat - min_lat) / (max_lat - min_lat) * SIZE[1])
+        s.x_coord = x
+        s.y_coord = y
+
+
+def setup():
+    size(SIZE[0], SIZE[1])
+    no_stroke()
+    no_loop()
+
+
+def draw():
+    background(255)
+    fill(0)
+    ellipse_mode(CENTER)
+    global stop_list
+    for s in stop_list:
+        ellipse(s.x_coord, s.y_coord, station_size, station_size)
+
+
 def create_url(lines: dict[int:Line]) -> str:
     stop_list = []
     for lid, line in lines.items():
@@ -97,11 +134,16 @@ def main():
     for id, l in lines.items():
         print(l.patterns)
     parse_line_patterns(lines)
-    create_url(lines)
-    url = create_url(lines)
-    print(url)
-    response = request_stations(url, save=True)
-    print(response)
+    stops: list[Stop] = [s for id, l in lines.items() for id, s in l.stops.items()]
+    calc_coordinates(stops)
+    global stop_list
+    stop_list = stops
+    # create_url(lines)
+    # url = create_url(lines)
+    # print(url)
+    # response = request_stations(url, save=True)
+    # print(response)
+    run()
 
 
 if __name__ == "__main__":

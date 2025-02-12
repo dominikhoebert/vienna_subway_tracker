@@ -10,6 +10,8 @@ class Stop:
     lon: float
     next: 'Stop' = None  # direction 1
     prev: 'Stop' = None  # direction 2
+    x_coord: int = 0
+    y_coord: int = 0
 
     def __str__(self):
         return f'{self.id}:{self.name}'

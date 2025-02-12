@@ -18,6 +18,8 @@ station_size = 10
 
 stop_list = []
 
+line_colors = {301: '#DA3831', 302: '#9769A6', 303: '#E7883B', 304: '#4AA45A', 306: '#946A41'}
+
 
 def read_lines(lines_file_name: str) -> dict[int:Line]:
     with open(lines_file_name, newline='') as csvfile:
@@ -26,6 +28,8 @@ def read_lines(lines_file_name: str) -> dict[int:Line]:
         lines: dict[int:Line] = {}
         for row in reader:
             l = Line(int(row[0]), row[1], row[4])
+            if l.id in line_colors.keys():
+                l.color = line_colors[l.id]
             lines[row[0]] = l
         return lines
 
@@ -74,6 +78,7 @@ def parse_line_patterns(lines: dict[int:Line]):
                 stop.prev = pattern[i - 1] if i > 0 else None
                 stop.next = pattern[i + 1] if i < len(pattern) - 1 else None
                 l.stops[stop.id] = stop
+                stop.color = l.color
 
 
 def calc_coordinates(stops: list[Stop]):
@@ -85,8 +90,8 @@ def calc_coordinates(stops: list[Stop]):
 
     # calculate x and y coordinates
     for s in stops:
-        x = int((s.lon - min_lon) / (max_lon - min_lon) * SIZE[0])
-        y = int((s.lat - min_lat) / (max_lat - min_lat) * SIZE[1])
+        x = int((s.lat - min_lat) / (max_lat - min_lat) * SIZE[0])
+        y = SIZE[1] - int((s.lon - min_lon) / (max_lon - min_lon) * SIZE[1])
         s.x_coord = x
         s.y_coord = y
 
@@ -103,7 +108,15 @@ def draw():
     ellipse_mode(CENTER)
     global stop_list
     for s in stop_list:
+        fill(*color_to_rgb(s.color))
         ellipse(s.x_coord, s.y_coord, station_size, station_size)
+        if s.next is not None:
+            stroke(*color_to_rgb(s.color))
+            line(s.x_coord, s.y_coord, s.next.x_coord, s.next.y_coord)
+
+
+def color_to_rgb(color: str) -> tuple[int, int, int]:
+    return tuple(int(color[i:i + 2], 16) for i in (1, 3, 5))
 
 
 def create_url(lines: dict[int:Line]) -> str:

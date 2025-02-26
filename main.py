@@ -1,10 +1,10 @@
 import csv
-import requests
+
 from datetime import datetime
 
 from p5 import *
 
-from lines import Line, Stop
+from lines import Line, Stop, get_line_by_name
 
 LINES_FILE_NAME = "data/wienerlinien-ogd-linien.csv"
 STOPS_FILE_NAME = "data/wienerlinien-ogd-haltepunkte.csv"
@@ -17,6 +17,7 @@ SIZE = (1000, 1000)  # x, y
 station_size = 10
 
 stop_list = []
+global_lines: dict[int:Line] = {}
 
 line_colors = {301: '#DA3831', 302: '#9769A6', 303: '#E7883B', 304: '#4AA45A', 306: '#946A41'}
 
@@ -81,6 +82,10 @@ def parse_line_patterns(lines: dict[int:Line]):
                 stop.color = l.color
 
 
+def map_range(value: float, in_min: float, in_max: float, out_min: float, out_max: float) -> float:
+    return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
+
 def calc_coordinates(stops: list[Stop]):
     # get min and max lat and lon
     min_lat = min([s.lat for s in stops])
@@ -88,12 +93,25 @@ def calc_coordinates(stops: list[Stop]):
     min_lon = min([s.lon for s in stops])
     max_lon = max([s.lon for s in stops])
 
+    min_x = 20
+    min_y = 20
+    max_x = SIZE[0] - 80
+    max_y = SIZE[1] - 140
+
     # calculate x and y coordinates
     for s in stops:
-        x = int((s.lat - min_lat) / (max_lat - min_lat) * SIZE[0])
-        y = SIZE[1] - int((s.lon - min_lon) / (max_lon - min_lon) * SIZE[1])
+        # x = int((s.lat - min_lat) / (max_lat - min_lat) * SIZE[0])
+        # y = SIZE[1] - int((s.lon - min_lon) / (max_lon - min_lon) * SIZE[1])
+        x = int(map_range(s.lat, min_lat, max_lat, min_x, max_x))
+        y = int(map_range(s.lon, min_lon, max_lon, max_y, min_y))
         s.x_coord = x
         s.y_coord = y
+
+
+def calc_between_coords(s1: Stop, s2: Stop) -> tuple[int, int]:
+    x = int((s1.x_coord + s2.x_coord) / 2)
+    y = int((s1.y_coord + s2.y_coord) / 2)
+    return x, y
 
 
 def setup():
@@ -106,16 +124,31 @@ def draw():
     background(255)
     fill(0)
     ellipse_mode(CENTER)
-    global stop_list
-    for s in stop_list:
-        fill(*color_to_rgb(s.color))
-        ellipse(s.x_coord, s.y_coord, station_size, station_size)
-        if s.next is not None:
-            stroke(*color_to_rgb(s.color))
-            line(s.x_coord, s.y_coord, s.next.x_coord, s.next.y_coord)
+    global global_lines
+    for l_id, l in global_lines.items():
+        for direction, pattern in l.patterns.items():
+            for s in pattern.values():
+                fill(*color_to_rgb(s.color))
+                if direction == 1:
+                    ellipse(s.x_coord, s.y_coord, station_size, station_size)
+                    text(s.name, s.x_coord + 10, s.y_coord)
+                    text(s.get_departures(3), s.x_coord + 10, s.y_coord + 10)
+                    if s.next is not None:
+                        stroke(*color_to_rgb(s.color))
+                        line(s.x_coord, s.y_coord, s.next.x_coord, s.next.y_coord)
+                if direction == 2:
+                    text(s.get_departures(3), s.x_coord + 10, s.y_coord + 20)
+                if 0 in s.departures:
+                    fill(240, 240, 0)
+                    ellipse(s.x_coord, s.y_coord, 8, 8)
+                if 1 in s.departures:
+                    fill(240, 240, 0)
+                    if s.prev is not None:
+                        cx, cy = calc_between_coords(s, s.prev)
+                        ellipse(cx, cy, 8, 8)
 
 
-def color_to_rgb(color: str) -> tuple[int, int, int]:
+def color_to_rgb(color: str) -> tuple[int, ...]:
     return tuple(int(color[i:i + 2], 16) for i in (1, 3, 5))
 
 
@@ -138,24 +171,39 @@ def request_stations(url: str, save: bool = False):
     return response.json()
 
 
+def parse_response(response: dict, lines: dict[int:Line]):
+    for monitor in response['data']['monitors']:
+        rbl = monitor['locationStop']['properties']['attributes']['rbl']
+        for line_dict in monitor['lines']:
+            line_name = line_dict['name']
+            line = get_line_by_name(lines, line_name)
+            for departure in line_dict['departures']['departure']:
+                line.stops[rbl].departures.append(departure['departureTime']['countdown'])
+
+
 def main():
     lines = read_lines(LINES_FILE_NAME)
     lines = filter_lines(lines, 'ptMetro')
-    print(lines)
     stops = read_stops(STOPS_FILE_NAME)
     read_connections(CONNECTION_FILE_NAME, lines, stops)
     for id, l in lines.items():
         print(l.patterns)
     parse_line_patterns(lines)
+    print(lines)
     stops: list[Stop] = [s for id, l in lines.items() for id, s in l.stops.items()]
     calc_coordinates(stops)
     global stop_list
     stop_list = stops
-    # create_url(lines)
-    # url = create_url(lines)
+    global global_lines
+    global_lines = lines
+    create_url(lines)
+    url = create_url(lines)
     # print(url)
-    # response = request_stations(url, save=True)
+    response = request_stations(url, save=True)
     # print(response)
+    parse_response(response, lines)
+    # for s in stops:
+    #     print(s.name, s.departures)
     run()
 
 

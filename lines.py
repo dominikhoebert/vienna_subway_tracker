@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass()
@@ -14,12 +15,17 @@ class Stop:
     x_coord: int = 0
     y_coord: int = 0
     color: str = '#000000'
+    departures: list[int] = field(default_factory=lambda: [])
 
     def __str__(self):
         return f'{self.id}:{self.name}'
 
     def __repr__(self):
         return self.__str__()
+
+    def get_departures(self, count: int) -> str:
+        deps = [str(d) for d in self.departures[:count]]
+        return '|'.join(deps)
 
 
 @dataclass
@@ -36,3 +42,9 @@ class Line:
 
     def __repr__(self):
         return self.__str__() + f'({len(self.stops)}stops)' + '|'.join([str(s) for id, s in self.stops.items()])
+
+def get_line_by_name(lines: dict[int:Line], name: str) -> Any | None:
+    for id, line in lines.items():
+        if line.name == name:
+            return line
+    return None

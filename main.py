@@ -126,8 +126,8 @@ def setup():
 
 def draw():
     dir = 0
-    show_name = False
-    show_departures = False
+    show_name = True
+    show_departures = True
     background(255)
     fill(0)
     ellipse_mode(CENTER)
@@ -214,8 +214,8 @@ def main():
     create_url(lines)
     url = create_url(lines)
     # print(url)
-    # response = request_stations(url, save=True)
-    response = load_response('responses/20250227133034_stations.json')
+    response = request_stations(url, save=True)
+    # response = load_response('responses/20250227133034_stations.json')
     # print(response)
     parse_response(response, lines)
     # for s in stops:

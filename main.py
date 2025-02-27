@@ -63,11 +63,15 @@ def read_connections(connections_file_name: str, lines: dict[int:Line], stops: d
                 line.patterns[direction][sequence] = stops[stop_id]
 
 
-def filter_lines(lines: dict[int:Line], type: str) -> dict[int:Line]:
+def filter_lines(lines: dict[int:Line], type: str, name: str = None) -> dict[int:Line]:
     l: dict[int:Line] = {}
     for id, line in lines.items():
         if line.type == type:
-            l[line.id] = line
+            if name is not None:
+                if line.name == name:
+                    l[line.id] = line
+            else:
+                l[line.id] = line
     return l
 
 
@@ -121,6 +125,9 @@ def setup():
 
 
 def draw():
+    dir = 0
+    show_name = False
+    show_departures = False
     background(255)
     fill(0)
     ellipse_mode(CENTER)
@@ -131,21 +138,24 @@ def draw():
                 fill(*color_to_rgb(s.color))
                 if direction == 1:
                     ellipse(s.x_coord, s.y_coord, station_size, station_size)
-                    text(s.name, s.x_coord + 10, s.y_coord)
-                    text(s.get_departures(3), s.x_coord + 10, s.y_coord + 10)
+                    if show_name:
+                        text(s.name, s.x_coord + 10, s.y_coord)
+                    if (dir == 0 or dir == 1) and show_departures:
+                        text(s.get_departures(3), s.x_coord + 10, s.y_coord + 10)
                     if s.next is not None:
                         stroke(*color_to_rgb(s.color))
                         line(s.x_coord, s.y_coord, s.next.x_coord, s.next.y_coord)
-                if direction == 2:
+                if direction == 2 and (dir == 0 or dir == 2) and show_departures:
                     text(s.get_departures(3), s.x_coord + 10, s.y_coord + 20)
-                if 0 in s.departures:
-                    fill(240, 240, 0)
-                    ellipse(s.x_coord, s.y_coord, 8, 8)
-                if 1 in s.departures:
-                    fill(240, 240, 0)
-                    if s.prev is not None:
-                        cx, cy = calc_between_coords(s, s.prev)
-                        ellipse(cx, cy, 8, 8)
+                if direction == dir or dir == 0:
+                    if 0 in s.departures:
+                        fill(240, 240, 0)
+                        ellipse(s.x_coord, s.y_coord, 8, 8)
+                    if 1 in s.departures:
+                        fill(240, 240, 0)
+                        if s.prev is not None:
+                            cx, cy = calc_between_coords(s, s.prev)
+                            ellipse(cx, cy, 8, 8)
 
 
 def color_to_rgb(color: str) -> tuple[int, ...]:
@@ -181,9 +191,14 @@ def parse_response(response: dict, lines: dict[int:Line]):
                 line.stops[rbl].departures.append(departure['departureTime']['countdown'])
 
 
+def load_response(file_name: str) -> dict:
+    with open(file_name, 'r') as f:
+        return json.load(f)
+
+
 def main():
     lines = read_lines(LINES_FILE_NAME)
-    lines = filter_lines(lines, 'ptMetro')
+    lines = filter_lines(lines, 'ptMetro', None)
     stops = read_stops(STOPS_FILE_NAME)
     read_connections(CONNECTION_FILE_NAME, lines, stops)
     for id, l in lines.items():
@@ -199,7 +214,8 @@ def main():
     create_url(lines)
     url = create_url(lines)
     # print(url)
-    response = request_stations(url, save=True)
+    # response = request_stations(url, save=True)
+    response = load_response('responses/20250227133034_stations.json')
     # print(response)
     parse_response(response, lines)
     # for s in stops:

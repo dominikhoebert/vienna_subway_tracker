@@ -225,34 +225,32 @@ def create_led_index(lines: dict[int:Line]):
             led_index += 2
 
 
-def main():
-    lines = read_lines(LINES_FILE_NAME)
+def startup(lines_file: str, stops_file: str, connection_file: str, led_index_file: str, ) -> str:
+    lines = read_lines(lines_file)
     lines = filter_lines(lines, 'ptMetro', None)
-    stops_dict = read_stops(STOPS_FILE_NAME)
-    read_connections(CONNECTION_FILE_NAME, lines, stops_dict)
-    for id, l in lines.items():
-        print(l.patterns)
+    stops_dict = read_stops(stops_file)
+    read_connections(connection_file, lines, stops_dict)
     parse_line_patterns(lines)
-    print(lines)
     stops_dict: dict[int:Stop] = {id: s for id, s in stops_dict.items() if s.line is not None}
     stops: list[Stop] = [s for id, l in lines.items() for id, s in l.stops.items()]
-
     # create_led_index(lines)
     # export_stop_csv(stops, LED_INDEX_FILE_NAME)
-    read_led_index(stops_dict, LED_INDEX_FILE_NAME)
-
+    read_led_index(stops_dict, led_index_file)
     calc_coordinates(stops)
     global stop_list
     stop_list = stops
     global global_lines
     global_lines = lines
-    create_url(lines)
-    url = create_url(lines)
-    # print(url)
+    return create_url(lines)
+
+
+def main():
+    url = startup(LINES_FILE_NAME, STOPS_FILE_NAME, CONNECTION_FILE_NAME, LED_INDEX_FILE_NAME)
     response = request_stations(url, save=True)
     # response = load_response('responses/20250227133034_stations.json')
     # print(response)
-    parse_response(response, lines)
+    global global_lines
+    parse_response(response, global_lines)
     # for s in stops:
     #     print(s.name, s.departures)
     run()

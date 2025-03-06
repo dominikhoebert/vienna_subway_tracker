@@ -1,4 +1,5 @@
 import csv
+import argparse
 
 from datetime import datetime
 
@@ -6,9 +7,9 @@ from p5 import *
 
 from lines import Line, Stop, get_line_by_name, get_stop_by_name
 
-LINES_FILE_NAME = "data/wienerlinien-ogd-linien.csv"
-STOPS_FILE_NAME = "data/wienerlinien-ogd-haltepunkte.csv"
-CONNECTION_FILE_NAME = "data/wienerlinien-ogd-fahrwegverlaeufe.csv"
+LINES_FILE_NAME = "data/linien.csv"
+STOPS_FILE_NAME = "data/haltepunkte.csv"
+CONNECTION_FILE_NAME = "data/fahrwegverlaeufe.csv"
 LED_INDEX_FILE_NAME = "data/led_index.csv"
 
 BASE_URL = "https://www.wienerlinien.at/ogd_realtime/monitor?stopId="
@@ -21,6 +22,20 @@ stop_list = []
 global_lines: dict[int:Line] = {}
 
 line_colors = {301: '#DA3831', 302: '#9769A6', 303: '#E7883B', 304: '#4AA45A', 306: '#946A41'}
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Wiener Linien Monitor')
+    parser.add_argument('lines', type=str, help='Path to the lines file')
+    parser.add_argument('stops', type=str, help='Path to the stops file')
+    parser.add_argument('connections', type=str, help='Path to the connections file')
+    parser.add_argument('led_index', type=str, help='Path to the led index file')
+    parser.add_argument('--p5', action='store_true', help='Enable p5 Simulation')
+    args = parser.parse_args()
+    LINES_FILE_NAME = args.lines
+    STOPS_FILE_NAME = args.stops
+    CONNECTION_FILE_NAME = args.connections
+    LED_INDEX_FILE_NAME = args.led_index
 
 
 def read_lines(lines_file_name: str) -> dict[int:Line]:
@@ -68,7 +83,6 @@ def read_led_index(stops: dict[int:Stop], file_name: str):
     with open(file_name, newline='', encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile, delimiter=';')
         headers = next(reader)
-        print(headers)
         for row in reader:
             stop = stops[int(row[1])]
             for i in range(4, len(row)):
@@ -245,6 +259,7 @@ def startup(lines_file: str, stops_file: str, connection_file: str, led_index_fi
 
 
 def main():
+    parse_args()
     url = startup(LINES_FILE_NAME, STOPS_FILE_NAME, CONNECTION_FILE_NAME, LED_INDEX_FILE_NAME)
     response = request_stations(url, save=True)
     # response = load_response('responses/20250227133034_stations.json')

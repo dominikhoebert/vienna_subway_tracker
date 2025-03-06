@@ -23,7 +23,7 @@ line_colors = {301: '#DA3831', 302: '#9769A6', 303: '#E7883B', 304: '#4AA45A', 3
 
 
 def read_lines(lines_file_name: str) -> dict[int:Line]:
-    with open(lines_file_name, newline='') as csvfile:
+    with open(lines_file_name, newline='', encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile, delimiter=';')
         headers = next(csvfile)
         lines: dict[int:Line] = {}
@@ -36,7 +36,7 @@ def read_lines(lines_file_name: str) -> dict[int:Line]:
 
 
 def read_stops(stops_file_name: str) -> dict[int:Stop]:
-    with open(stops_file_name, newline='') as csvfile:
+    with open(stops_file_name, newline='', encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile, delimiter=';')
         headers = next(csvfile)
         stops: dict[int:Stop] = {}
@@ -50,7 +50,7 @@ def read_stops(stops_file_name: str) -> dict[int:Stop]:
 
 
 def read_connections(connections_file_name: str, lines: dict[int:Line], stops: dict[int:Stop]):
-    with open(connections_file_name, newline='') as csvfile:
+    with open(connections_file_name, newline='', encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile, delimiter=';')
         headers = next(csvfile)
         for row in reader:

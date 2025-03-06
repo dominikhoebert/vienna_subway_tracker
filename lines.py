@@ -14,8 +14,9 @@ class Stop:
     prev: 'Stop' = None  # direction 2
     x_coord: int = 0
     y_coord: int = 0
-    color: str = '#000000'
+    line = None
     departures: list[int] = field(default_factory=lambda: [])
+    led_index: dict[str:int] = field(default_factory=lambda: {})
 
     def __str__(self):
         return f'{self.id}:{self.name}'
@@ -26,6 +27,13 @@ class Stop:
     def get_departures(self, count: int) -> str:
         deps = [str(d) for d in self.departures[:count]]
         return '|'.join(deps)
+
+
+def get_stop_by_name(stops: dict[int:Stop], name: str) -> Stop | None:
+    for id, stop in stops.items():
+        if stop.name == name:
+            return stop
+    return None
 
 
 @dataclass
@@ -43,7 +51,8 @@ class Line:
     def __repr__(self):
         return self.__str__() + f'({len(self.stops)}stops)' + '|'.join([str(s) for id, s in self.stops.items()])
 
-def get_line_by_name(lines: dict[int:Line], name: str) -> Any | None:
+
+def get_line_by_name(lines: dict[int:Line], name: str) -> Line | None:
     for id, line in lines.items():
         if line.name == name:
             return line

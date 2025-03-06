@@ -4,11 +4,12 @@ from datetime import datetime
 
 from p5 import *
 
-from lines import Line, Stop, get_line_by_name
+from lines import Line, Stop, get_line_by_name, get_stop_by_name
 
 LINES_FILE_NAME = "data/wienerlinien-ogd-linien.csv"
 STOPS_FILE_NAME = "data/wienerlinien-ogd-haltepunkte.csv"
 CONNECTION_FILE_NAME = "data/wienerlinien-ogd-fahrwegverlaeufe.csv"
+LED_INDEX_FILE_NAME = "data/led_index.csv"
 
 BASE_URL = "https://www.wienerlinien.at/ogd_realtime/monitor?stopId="
 URL_JOINER = "&stopId="
@@ -63,6 +64,17 @@ def read_connections(connections_file_name: str, lines: dict[int:Line], stops: d
                 line.patterns[direction][sequence] = stops[stop_id]
 
 
+def read_led_index(stops: dict[int:Stop], file_name: str):
+    with open(file_name, newline='', encoding='utf-8') as csvfile:
+        reader = csv.reader(csvfile, delimiter=';')
+        headers = next(reader)
+        print(headers)
+        for row in reader:
+            stop = stops[int(row[1])]
+            for i in range(4, len(row)):
+                stop.led_index[headers[i]] = int(row[i])
+
+
 def filter_lines(lines: dict[int:Line], type: str, name: str = None) -> dict[int:Line]:
     l: dict[int:Line] = {}
     for id, line in lines.items():
@@ -83,7 +95,7 @@ def parse_line_patterns(lines: dict[int:Line]):
                 stop.prev = pattern[i - 1] if i > 0 else None
                 stop.next = pattern[i + 1] if i < len(pattern) - 1 else None
                 l.stops[stop.id] = stop
-                stop.color = l.color
+                stop.line = l
 
 
 def map_range(value: float, in_min: float, in_max: float, out_min: float, out_max: float) -> float:
@@ -135,7 +147,7 @@ def draw():
     for l_id, l in global_lines.items():
         for direction, pattern in l.patterns.items():
             for s in pattern.values():
-                fill(*color_to_rgb(s.color))
+                fill(*color_to_rgb(s.line.color))
                 if direction == 1:
                     ellipse(s.x_coord, s.y_coord, station_size, station_size)
                     if show_name:
@@ -143,7 +155,7 @@ def draw():
                     if (dir == 0 or dir == 1) and show_departures:
                         text(s.get_departures(3), s.x_coord + 10, s.y_coord + 10)
                     if s.next is not None:
-                        stroke(*color_to_rgb(s.color))
+                        stroke(*color_to_rgb(s.line.color))
                         line(s.x_coord, s.y_coord, s.next.x_coord, s.next.y_coord)
                 if direction == 2 and (dir == 0 or dir == 2) and show_departures:
                     text(s.get_departures(3), s.x_coord + 10, s.y_coord + 20)
@@ -196,16 +208,39 @@ def load_response(file_name: str) -> dict:
         return json.load(f)
 
 
+def export_stop_csv(stops: dict[int:Stop], file_name: str):
+    with open(file_name, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile, delimiter=';')
+        writer.writerow(['line', 'id', 'diva', 'name', 'led_index_simple'])
+        for s in stops:
+            writer.writerow([s.line.name, s.id, s.diva, s.name, s.led_index['simple']])
+
+
+def create_led_index(lines: dict[int:Line]):
+    led_index: int = 0
+    for _, l in lines.items():
+        for _, s in l.patterns[1].items():
+            s.led_index['simple'] = led_index
+            get_stop_by_name(l.patterns[2], s.name).led_index['simple'] = led_index
+            led_index += 2
+
+
 def main():
     lines = read_lines(LINES_FILE_NAME)
     lines = filter_lines(lines, 'ptMetro', None)
-    stops = read_stops(STOPS_FILE_NAME)
-    read_connections(CONNECTION_FILE_NAME, lines, stops)
+    stops_dict = read_stops(STOPS_FILE_NAME)
+    read_connections(CONNECTION_FILE_NAME, lines, stops_dict)
     for id, l in lines.items():
         print(l.patterns)
     parse_line_patterns(lines)
     print(lines)
+    stops_dict: dict[int:Stop] = {id: s for id, s in stops_dict.items() if s.line is not None}
     stops: list[Stop] = [s for id, l in lines.items() for id, s in l.stops.items()]
+
+    # create_led_index(lines)
+    # export_stop_csv(stops, LED_INDEX_FILE_NAME)
+    read_led_index(stops_dict, LED_INDEX_FILE_NAME)
+
     calc_coordinates(stops)
     global stop_list
     stop_list = stops

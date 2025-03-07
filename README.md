@@ -15,3 +15,5 @@ mit Python Script aus wienerlinien-ogd-fahrverlaeufe.csv, haltepunkte und linien
 - ~~lat lon to coordinates~~
 - ~~draw color dots for stations~~
 - ~~connect dots with lines~~
+- Filter
+- 

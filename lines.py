@@ -17,6 +17,7 @@ class Stop:
     line = None
     departures: list[int] = field(default_factory=lambda: [])
     led_index: dict[str:int] = field(default_factory=lambda: {})
+    led_index_overwritten: dict[str:int] = field(default_factory=lambda: {})
 
     def __str__(self):
         return f'{self.id}:{self.name}'
@@ -29,8 +30,10 @@ class Stop:
         return '|'.join(deps)
 
 
-def get_stop_by_name(stops: dict[int:Stop], name: str) -> Stop | None:
-    for id, stop in stops.items():
+def get_stop_by_name(stops: dict[int:Stop], name: str, all: bool = False) -> Stop | None | list[Stop]:
+    if all:
+        return [stop for _, stop in stops.items() if stop.name == name]
+    for _, stop in stops.items():
         if stop.name == name:
             return stop
     return None
@@ -44,6 +47,7 @@ class Line:
     stops: dict[int:Stop] = field(default_factory=lambda: {})
     patterns: dict[int:dict[int:Stop]] = field(default_factory=lambda: {1: {}, 2: {}})  # direction -> sequence -> stop
     color: str = '#000000'
+    led_color: dict[int:list[int]] = field(default_factory=lambda: {})
 
     def __str__(self):
         return f'{self.id}:{self.name}'

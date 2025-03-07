@@ -1,9 +1,9 @@
 import csv
 import argparse
-
 from datetime import datetime
 
 from p5 import *
+from flask import Flask, request
 
 from lines import Line, Stop, get_line_by_name, get_stop_by_name
 
@@ -15,8 +15,13 @@ station_size = 10
 
 stop_list = []
 global_lines: dict[int:Line] = {}
+url = ""
 
 line_colors = {301: '#DA3831', 302: '#9769A6', 303: '#E7883B', 304: '#4AA45A', 306: '#946A41'}
+led_colors = {301: {1: [218, 56, 49], 2: [133, 34, 30]}, 302: {1: [151, 105, 166], 2: [228, 159, 251]},
+              303: {1: [231, 136, 59], 2: [61, 36, 16]}, 304: {1: [74, 164, 90], 2: [112, 249, 137, ]},
+              306: {1: [148, 106, 65], 2: [233, 167, 102]}}
+app = Flask(__name__)
 
 
 def parse_args():
@@ -26,6 +31,7 @@ def parse_args():
     parser.add_argument('connections', type=str, help='Path to the connections file')
     parser.add_argument('led_index', type=str, help='Path to the led index file')
     parser.add_argument('--p5', action='store_true', help='Enable p5 Simulation')
+    parser.add_argument('--debug', action='store_true', help='Enable Debug Mode')
     args = parser.parse_args()
     return args
 
@@ -39,6 +45,7 @@ def read_lines(lines_file_name: str) -> dict[int:Line]:
             l = Line(int(row[0]), row[1], row[4])
             if l.id in line_colors.keys():
                 l.color = line_colors[l.id]
+                l.led_color = led_colors[l.id]
             lines[row[0]] = l
         return lines
 
@@ -231,6 +238,17 @@ def create_led_index(lines: dict[int:Line]):
             led_index += 2
 
 
+def overwrite_led_index(stops: dict[int:Stop]):
+    searched = []
+    for _, stop in stops.items():
+        if stop.name not in searched:
+            searched.append(stop.name)
+            similar_stops = get_stop_by_name(stops, stop.name, all=True)
+            first_stop = similar_stops[0]
+            for s in similar_stops:
+                s.led_index_overwritten = first_stop.led_index
+
+
 def startup(lines_file: str, stops_file: str, connection_file: str, led_index_file: str, ) -> str:
     lines = read_lines(lines_file)
     lines = filter_lines(lines, 'ptMetro', None)
@@ -242,6 +260,7 @@ def startup(lines_file: str, stops_file: str, connection_file: str, led_index_fi
     # create_led_index(lines)
     # export_stop_csv(stops, LED_INDEX_FILE_NAME)
     read_led_index(stops_dict, led_index_file)
+    overwrite_led_index(stops_dict)
     calc_coordinates(stops)
     global stop_list
     stop_list = stops
@@ -252,16 +271,51 @@ def startup(lines_file: str, stops_file: str, connection_file: str, led_index_fi
 
 def main():
     args = parse_args()
+    global url
     url = startup(args.lines, args.stops, args.connections, args.led_index)
-    response = request_stations(url, save=True)
-    # response = load_response('responses/20250227133034_stations.json')
-    # print(response)
-    global global_lines
-    parse_response(response, global_lines)
-    # for s in stops:
-    #     print(s.name, s.departures)
     if args.p5:
+        response = request_stations(url, save=True)
+        # response = load_response('responses/20250227133034_stations.json')
+        # print(response)
+        global global_lines
+        parse_response(response, global_lines)
         run()
+    app.run(debug=args.debug)
+
+
+last_response = None
+last_response_time = 0
+
+
+@app.route("/api/<name>")
+def api(name: str):
+    filter_param = request.args.get('filter')
+    print(filter_param) # TODO: implement filter
+    # request if response is older than 30 seconds
+    global last_response
+    global last_response_time
+    global global_lines
+    timestamp_now = datetime.now().timestamp()
+    if (timestamp_now - last_response_time) > 30:
+        last_response_time = timestamp_now
+        last_response = request_stations(url)
+        parse_response(last_response, global_lines)
+        last_response_time = timestamp_now
+    # convert to led index -> color json
+    color_dict = {}
+    for l_id, l in global_lines.items():
+        for direction, pattern in l.patterns.items():
+            for s in pattern.values():
+                if 0 in s.departures:
+                    color_dict[s.led_index_overwritten[name]] = l.led_color[direction]
+                if 1 in s.departures:
+                    if s.prev is not None:
+                        color_dict[s.led_index_overwritten[name] + 1] = l.led_color[direction] # TODO: calc between station led id
+    # TODO: implement two trains on one LED ID
+    return {"timestamp_iso": last_response_time,
+            "timestamp": datetime.fromtimestamp(timestamp_now).strftime('%Y-%m-%d %H:%M:%S'),
+            "led_index_name": name,
+            "leds": color_dict}
 
 
 if __name__ == "__main__":

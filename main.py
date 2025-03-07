@@ -7,11 +7,6 @@ from p5 import *
 
 from lines import Line, Stop, get_line_by_name, get_stop_by_name
 
-LINES_FILE_NAME = "data/linien.csv"
-STOPS_FILE_NAME = "data/haltepunkte.csv"
-CONNECTION_FILE_NAME = "data/fahrwegverlaeufe.csv"
-LED_INDEX_FILE_NAME = "data/led_index.csv"
-
 BASE_URL = "https://www.wienerlinien.at/ogd_realtime/monitor?stopId="
 URL_JOINER = "&stopId="
 
@@ -32,10 +27,7 @@ def parse_args():
     parser.add_argument('led_index', type=str, help='Path to the led index file')
     parser.add_argument('--p5', action='store_true', help='Enable p5 Simulation')
     args = parser.parse_args()
-    LINES_FILE_NAME = args.lines
-    STOPS_FILE_NAME = args.stops
-    CONNECTION_FILE_NAME = args.connections
-    LED_INDEX_FILE_NAME = args.led_index
+    return args
 
 
 def read_lines(lines_file_name: str) -> dict[int:Line]:
@@ -259,8 +251,8 @@ def startup(lines_file: str, stops_file: str, connection_file: str, led_index_fi
 
 
 def main():
-    parse_args()
-    url = startup(LINES_FILE_NAME, STOPS_FILE_NAME, CONNECTION_FILE_NAME, LED_INDEX_FILE_NAME)
+    args = parse_args()
+    url = startup(args.lines, args.stops, args.connections, args.led_index)
     response = request_stations(url, save=True)
     # response = load_response('responses/20250227133034_stations.json')
     # print(response)
@@ -268,7 +260,8 @@ def main():
     parse_response(response, global_lines)
     # for s in stops:
     #     print(s.name, s.departures)
-    run()
+    if args.p5:
+        run()
 
 
 if __name__ == "__main__":

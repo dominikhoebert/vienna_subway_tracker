@@ -193,7 +193,7 @@ def main():
     args = parse_args()
     global url
     url = startup(args.lines, args.stops, args.connections, args.led_index)
-    app.run(debug=args.debug)
+    app.run(debug=args.debug, host='0.0.0.0')
 
 
 last_response = None

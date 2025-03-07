@@ -14,4 +14,6 @@ COPY data/linien.csv .
 COPY lines.py .
 COPY main.py .
 
+EXPOSE 5000
+
 ENTRYPOINT ["python3", "main.py", "linien.csv", "haltepunkte.csv", "fahrwegverlaeufe.csv", "led_index.csv", "--debug"]

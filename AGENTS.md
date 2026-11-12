@@ -11,15 +11,17 @@ python3 main.py data/linien.csv data/haltepunkte.csv data/fahrwegverlaeufe.csv d
 
 - Positional order is fixed (`lines stops connections led_index`); the server listens on `0.0.0.0:5000`.
 - Shortcuts: `just run`, `just run-debug`, `just sim`, `just check`, `just docker-build`.
-- `startup()` only parses CSVs. The upstream API is first called on an API request, then cached for 30 s.
+- `startup()` parses CSVs and computes stop map coordinates. The upstream API is first called on an API request, then cached for 30 s.
+- Web map: `GET /map` serves `templates/map.html` (SVG, polls `/map/data` every 30 s). `/map/data` returns stops, line patterns and the next departures.
 - `GET /api/<name>`: `<name>` must be a key in `Stop.led_index`, i.e. a column name from `data/led_index.csv` — currently `/api/led_index_simple`. Unknown names return `404` with the available names.
 - Docker: `docker build -t vienna-subway-tracker .` then `docker run -p 5000:5000 vienna-subway-tracker`. The image copies the four CSVs into `/app` and passes bare filenames; `sim.py` is not in the image.
 
 ## Layout
 
-- `main.py` — CSV loaders, `startup()`, Flask app. Module globals `global_lines`, `stop_list`, `url` are filled by `startup()`.
+- `main.py` — CSV loaders, `startup()`, `calc_coordinates()`, Flask app. Module globals `global_lines`, `stop_list`, `url` are filled by `startup()`.
 - `lines.py` — `Line`/`Stop` dataclasses and name lookups.
-- `sim.py` — p5 map view. It reuses `main.startup()` and adds `calc_coordinates()`; run it separately from a checkout containing `p5`.
+- `templates/map.html` — web map page served at `/map`.
+- `sim.py` — p5 map view. It reuses `main.startup()` (which computes coordinates); run it separately from a checkout containing `p5`.
 - `data/*.csv` — semicolon-separated, parsed positionally; the header row is skipped.
 
 ## CSV columns actually read

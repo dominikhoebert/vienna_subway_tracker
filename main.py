@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import os
 import threading
 import time
@@ -10,7 +11,7 @@ from datetime import datetime
 from typing import Any
 
 import requests
-from flask import Flask
+from flask import Flask, render_template
 
 from lines import Line, Stop, get_stop_by_name
 
@@ -18,6 +19,7 @@ BASE_URL = 'https://www.wienerlinien.at/ogd_realtime/monitor?stopId='
 URL_JOINER = '&stopId='
 CACHE_TTL_SECONDS = 30
 REQUEST_TIMEOUT_SECONDS = 10
+MAP_SIZE = (1000, 1000)  # x, y
 
 LINE_COLORS = {
     301: '#DA3831',
@@ -35,6 +37,7 @@ LED_COLORS = {
 }
 
 stop_list: list[Stop] = []
+map_projection: tuple[float, float, float, float] | None = None
 global_lines: dict[int, Line] = {}
 led_index_names: list[str] = []
 url = ''
@@ -251,13 +254,49 @@ def overwrite_led_index(stops: dict[int, Stop]) -> None:
             stop.led_index_overwritten = source.led_index
 
 
+def calc_coordinates(stops: list[Stop]) -> tuple[float, float, float, float] | None:
+    # Returns (ax, bx, ay, by) with x = ax * lon + bx and y = ay * lat + by.
+    # Longitude is scaled by cos(latitude) so the map keeps its real proportions
+    # and the OpenStreetMap background lines up with the stops.
+    located = [stop for stop in stops if stop.lat is not None and stop.lon is not None]
+    if not located:
+        return None
+
+    min_lat = min(stop.lat for stop in located)
+    max_lat = max(stop.lat for stop in located)
+    min_lon = min(stop.lon for stop in located)
+    max_lon = max(stop.lon for stop in located)
+
+    min_x = 20
+    min_y = 20
+    max_x = MAP_SIZE[0] - 80
+    max_y = MAP_SIZE[1] - 140
+
+    lon_scale = math.cos(math.radians((min_lat + max_lat) / 2))
+    geo_width = (max_lon - min_lon) * lon_scale
+    geo_height = max_lat - min_lat
+    scale = min((max_x - min_x) / geo_width, (max_y - min_y) / geo_height)
+    offset_x = min_x + ((max_x - min_x) - geo_width * scale) / 2
+    offset_y = min_y + ((max_y - min_y) - geo_height * scale) / 2
+
+    ax = lon_scale * scale
+    bx = offset_x - min_lon * ax
+    ay = -scale
+    by = offset_y + max_lat * scale
+
+    for stop in located:
+        stop.x_coord = int(ax * stop.lon + bx)
+        stop.y_coord = int(ay * stop.lat + by)
+    return ax, bx, ay, by
+
+
 def startup(
     lines_file: str,
     stops_file: str,
     connection_file: str,
     led_index_file: str,
 ) -> str:
-    global stop_list, global_lines, led_index_names, url
+    global stop_list, global_lines, led_index_names, url, map_projection
 
     lines = filter_lines(read_lines(lines_file), 'ptMetro')
     stops = read_stops(stops_file)
@@ -271,6 +310,7 @@ def startup(
 
     global_lines = lines
     stop_list = list(stops.values())
+    map_projection = calc_coordinates(stop_list)
     led_index_names = sorted(
         {key for stop in stops.values() for key in stop.led_index_overwritten}
     )
@@ -338,6 +378,76 @@ def api(name: str):
         'led_index_name': name,
         'leds': leds,
     }
+
+
+def station_departures(group: list[tuple[int, Stop]], direction: int) -> list[int]:
+    return sorted(
+        countdown
+        for platform_direction, stop in group
+        if platform_direction == direction
+        for countdown in stop.departures
+    )[:3]
+
+
+def build_map_data() -> dict[str, Any]:
+    # Platforms of one station (one StopID per direction) share a name, so they
+    # are merged into one map station named by that name.
+    platforms: dict[str, list[tuple[int, Stop]]] = {}
+    lines: list[dict[str, Any]] = []
+    for line in global_lines.values():
+        directions: dict[str, list[str]] = {}
+        for direction, pattern in line.patterns.items():
+            ordered = [pattern[sequence] for sequence in sorted(pattern)]
+            located = [s for s in ordered if s.lat is not None and s.lon is not None]
+            if not located:
+                continue
+            directions[str(direction)] = [s.name for s in located]
+            for s in located:
+                platforms.setdefault(s.name, []).append((direction, s))
+        if directions:
+            lines.append(
+                {
+                    'id': line.id,
+                    'name': line.name,
+                    'color': line.color,
+                    'directions': directions,
+                }
+            )
+    projection = None
+    if map_projection is not None:
+        ax, bx, ay, by = map_projection
+        projection = {'x': [ax, bx], 'y': [ay, by]}
+    return {
+        'projection': projection,
+        'stations': [
+            {
+                'name': name,
+                'x': int(sum(s.x_coord for _, s in group) / len(group)),
+                'y': int(sum(s.y_coord for _, s in group) / len(group)),
+                'departures': {
+                    '1': station_departures(group, 1),
+                    '2': station_departures(group, 2),
+                },
+            }
+            for name, group in platforms.items()
+        ],
+        'lines': lines,
+    }
+
+
+@app.route('/map')
+def map_view():
+    return render_template('map.html')
+
+
+@app.route('/map/data')
+def map_data():
+    get_response()
+    with _cache_lock:
+        data = build_map_data()
+        timestamp = _last_response_at
+    data['timestamp'] = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+    return data
 
 
 def main() -> None:

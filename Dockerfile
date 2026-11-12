@@ -13,6 +13,7 @@ COPY data/linien.csv .
 
 COPY lines.py .
 COPY main.py .
+COPY templates/ ./templates/
 
 EXPOSE 5000
 

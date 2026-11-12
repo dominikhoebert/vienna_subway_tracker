@@ -19,35 +19,6 @@ def calc_between_coords(s1: Stop, s2: Stop) -> tuple[int, int]:
     return (s1.x_coord + s2.x_coord) // 2, (s1.y_coord + s2.y_coord) // 2
 
 
-def map_range(
-    value: float, in_min: float, in_max: float, out_min: float, out_max: float
-) -> float:
-    return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
-
-
-def calc_coordinates(stops: list[Stop]) -> None:
-    located = [stop for stop in stops if stop.lat is not None and stop.lon is not None]
-    if not located:
-        return
-
-    min_lat = min(stop.lat for stop in located)
-    max_lat = max(stop.lat for stop in located)
-    min_lon = min(stop.lon for stop in located)
-    max_lon = max(stop.lon for stop in located)
-
-    min_x = 20
-    min_y = 20
-    max_x = SIZE[0] - 80
-    max_y = SIZE[1] - 140
-
-    for stop in located:
-        lat, lon = stop.lat, stop.lon
-        if lat is None or lon is None:
-            continue
-        stop.x_coord = int(map_range(lon, min_lon, max_lon, min_x, max_x))
-        stop.y_coord = int(map_range(lat, min_lat, max_lat, max_y, min_y))
-
-
 def setup() -> None:
     size(SIZE[0], SIZE[1])
     no_stroke()
@@ -106,7 +77,6 @@ def draw() -> None:
 if __name__ == '__main__':
     args = main.parse_args()
     url = main.startup(args.lines, args.stops, args.connections, args.led_index)
-    calc_coordinates(main.stop_list)
     response = main.request_stations(url, save=True)
     main.parse_response(response, main.global_lines)
     run()

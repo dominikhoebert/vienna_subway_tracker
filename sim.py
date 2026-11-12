@@ -1,14 +1,14 @@
+from __future__ import annotations
+
 from p5 import *
 
+import main
 from lines import Stop
-from main import *
 
 SIZE = (1000, 1000)  # x, y
-station_size = 10
-
-stop_list = []
-global_lines: dict[int:Line] = {}
-url = ""
+STATION_SIZE = 10
+SHOW_NAMES = True
+SHOW_DEPARTURES = True
 
 
 def color_to_rgb(color: str) -> tuple[int, ...]:
@@ -16,102 +16,97 @@ def color_to_rgb(color: str) -> tuple[int, ...]:
 
 
 def calc_between_coords(s1: Stop, s2: Stop) -> tuple[int, int]:
-    x = int((s1.x_coord + s2.x_coord) / 2)
-    y = int((s1.y_coord + s2.y_coord) / 2)
-    return x, y
+    return (s1.x_coord + s2.x_coord) // 2, (s1.y_coord + s2.y_coord) // 2
 
 
-def map_range(value: float, in_min: float, in_max: float, out_min: float, out_max: float) -> float:
+def map_range(
+    value: float, in_min: float, in_max: float, out_min: float, out_max: float
+) -> float:
     return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 
-def calc_coordinates(stops: list[Stop]):
-    # get min and max lat and lon
-    min_lat = min([s.lat for s in stops])
-    max_lat = max([s.lat for s in stops])
-    min_lon = min([s.lon for s in stops])
-    max_lon = max([s.lon for s in stops])
+def calc_coordinates(stops: list[Stop]) -> None:
+    located = [stop for stop in stops if stop.lat is not None and stop.lon is not None]
+    if not located:
+        return
+
+    min_lat = min(stop.lat for stop in located)
+    max_lat = max(stop.lat for stop in located)
+    min_lon = min(stop.lon for stop in located)
+    max_lon = max(stop.lon for stop in located)
 
     min_x = 20
     min_y = 20
     max_x = SIZE[0] - 80
     max_y = SIZE[1] - 140
 
-    # calculate x and y coordinates
-    for s in stops:
-        # x = int((s.lat - min_lat) / (max_lat - min_lat) * SIZE[0])
-        # y = SIZE[1] - int((s.lon - min_lon) / (max_lon - min_lon) * SIZE[1])
-        x = int(map_range(s.lat, min_lat, max_lat, min_x, max_x))
-        y = int(map_range(s.lon, min_lon, max_lon, max_y, min_y))
-        s.x_coord = x
-        s.y_coord = y
+    for stop in located:
+        lat, lon = stop.lat, stop.lon
+        if lat is None or lon is None:
+            continue
+        stop.x_coord = int(map_range(lon, min_lon, max_lon, min_x, max_x))
+        stop.y_coord = int(map_range(lat, min_lat, max_lat, max_y, min_y))
 
 
-def setup():
+def setup() -> None:
     size(SIZE[0], SIZE[1])
     no_stroke()
     no_loop()
 
 
-def draw():
-    dir = 0
-    show_name = True
-    show_departures = True
+def draw() -> None:
+    direction_filter = 0
     background(255)
     fill(0)
     ellipse_mode(CENTER)
-    global global_lines
-    for l_id, l in global_lines.items():
-        for direction, pattern in l.patterns.items():
-            for s in pattern.values():
-                fill(*color_to_rgb(s.line.color))
+
+    for metro_line in main.global_lines.values():
+        for direction, pattern in metro_line.patterns.items():
+            for stop in pattern.values():
+                fill(*color_to_rgb(metro_line.color))
                 if direction == 1:
-                    ellipse(s.x_coord, s.y_coord, station_size, station_size)
-                    if show_name:
-                        text(s.name, s.x_coord + 10, s.y_coord)
-                    if (dir == 0 or dir == 1) and show_departures:
-                        text(s.get_departures(3), s.x_coord + 10, s.y_coord + 10)
-                    if s.next is not None:
-                        stroke(*color_to_rgb(s.line.color))
-                        line(s.x_coord, s.y_coord, s.next.x_coord, s.next.y_coord)
-                if direction == 2 and (dir == 0 or dir == 2) and show_departures:
-                    text(s.get_departures(3), s.x_coord + 10, s.y_coord + 20)
-                if direction == dir or dir == 0:
-                    if 0 in s.departures:
+                    ellipse(stop.x_coord, stop.y_coord, STATION_SIZE, STATION_SIZE)
+                    if SHOW_NAMES:
+                        text(stop.name, stop.x_coord + 10, stop.y_coord)
+                    if direction_filter in (0, 1) and SHOW_DEPARTURES:
+                        text(
+                            stop.get_departures(3),
+                            stop.x_coord + 10,
+                            stop.y_coord + 10,
+                        )
+                    if stop.next is not None:
+                        stroke(*color_to_rgb(metro_line.color))
+                        line(
+                            stop.x_coord,
+                            stop.y_coord,
+                            stop.next.x_coord,
+                            stop.next.y_coord,
+                        )
+                if (
+                    direction == 2
+                    and direction_filter in (0, 2)
+                    and SHOW_DEPARTURES
+                ):
+                    text(
+                        stop.get_departures(3),
+                        stop.x_coord + 10,
+                        stop.y_coord + 20,
+                    )
+                if direction_filter in (0, direction):
+                    departures = set(stop.departures)
+                    if 0 in departures:
                         fill(240, 240, 0)
-                        ellipse(s.x_coord, s.y_coord, 8, 8)
-                    if 1 in s.departures:
+                        ellipse(stop.x_coord, stop.y_coord, 8, 8)
+                    if 1 in departures and stop.prev is not None:
                         fill(240, 240, 0)
-                        if s.prev is not None:
-                            cx, cy = calc_between_coords(s, s.prev)
-                            ellipse(cx, cy, 8, 8)
-
-
-def startup(lines_file: str, stops_file: str, connection_file: str, led_index_file: str, ) -> str:
-    lines = read_lines(lines_file)
-    lines = filter_lines(lines, 'ptMetro', None)
-    stops_dict = read_stops(stops_file)
-    read_connections(connection_file, lines, stops_dict)
-    parse_line_patterns(lines)
-    stops_dict: dict[int:Stop] = {id: s for id, s in stops_dict.items() if s.line is not None}
-    stops: list[Stop] = [s for id, l in lines.items() for id, s in l.stops.items()]
-    # create_led_index(lines)
-    # export_stop_csv(stops, LED_INDEX_FILE_NAME)
-    read_led_index(stops_dict, led_index_file)
-    overwrite_led_index(stops_dict)
-    calc_coordinates(stops)
-    global stop_list
-    stop_list = stops
-    global global_lines
-    global_lines = lines
-    return create_url(lines)
+                        cx, cy = calc_between_coords(stop, stop.prev)
+                        ellipse(cx, cy, 8, 8)
 
 
 if __name__ == '__main__':
-    args = parse_args()
-    url = startup(args.lines, args.stops, args.connections, args.led_index)
-    response = request_stations(url, save=True)
-    # response = load_response('responses/20250227133034_stations.json')
-    # print(response)
-    parse_response(response, global_lines)
+    args = main.parse_args()
+    url = main.startup(args.lines, args.stops, args.connections, args.led_index)
+    calc_coordinates(main.stop_list)
+    response = main.request_stations(url, save=True)
+    main.parse_response(response, main.global_lines)
     run()
